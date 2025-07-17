@@ -3,20 +3,25 @@ name: Release Obsidian Plugin
 on:
   push:
     tags:
-      - "*"
+      - "v*"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build:
+  release:
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Use Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "18.x"
+          node-version: "24.x"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -26,19 +31,74 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Lint
+        run: pnpm lint
+
+      - name: Type check
+        run: pnpm type-check
+
+      - name: Run tests
+        run: pnpm test
+
       - name: Build plugin for production
-        run: pnpm run build:plugin:prod
+        run: pnpm build:prod
 
       - name: Copy styles.css to dist
         run: cp styles.css dist/
+
+      - name: Validate manifest version
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          MANIFEST_VERSION=$(node -p "require('./dist/manifest.json').version")
+
+          if [ "$PACKAGE_VERSION" != "$MANIFEST_VERSION" ]; then
+            echo "Version mismatch: package.json ($PACKAGE_VERSION) != manifest.json ($MANIFEST_VERSION)"
+            exit 1
+          fi
+
+          echo "Version validation passed: $PACKAGE_VERSION"
 
       - name: Create release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           tag="${GITHUB_REF#refs/tags/}"
+          version="${tag#v}"
+
+          # Create release notes from CHANGELOG.md if it exists
+          if [ -f "CHANGELOG.md" ]; then
+            # Extract current version notes from CHANGELOG.md
+            notes_file=$(mktemp)
+            awk "/^## \[$version\]/ {flag=1; next} /^## \[/ && flag {exit} flag" CHANGELOG.md > "$notes_file"
+
+            if [ -s "$notes_file" ]; then
+              notes="$(cat "$notes_file")"
+            else
+              notes="Release $tag"
+            fi
+            rm "$notes_file"
+          else
+            notes="Release $tag"
+          fi
 
           gh release create "$tag" \
             --title="$tag" \
-            --draft \
+            --notes="$notes" \
             dist/main.js dist/manifest.json dist/styles.css
+
+  # Optional: Submit to Obsidian Community Plugin repository
+  # Uncomment and configure when ready to submit to the community
+  # community-submit:
+  #   runs-on: ubuntu-latest
+  #   needs: release
+  #   if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+  #   steps:
+  #     - name: Submit to Obsidian Community
+  #       uses: actions/github-script@v7
+  #       with:
+  #         github-token: ${{ secrets.GITHUB_TOKEN }}
+  #         script: |
+  #           // This would create a PR to the obsidian-releases repository
+  #           // See: https://github.com/obsidianmd/obsidian-releases
+  #           // You'll need to implement the actual submission logic
+  #           console.log('Community submission would happen here')
