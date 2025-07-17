@@ -1,0 +1,27 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "src/plugin/main.ts!",
+    "src/plugin/service.ts!",
+    "src/plugin/settings-tab.ts!",
+    "src/plugin/view.ts!",
+    "src/plugin/types.ts!",
+    "src/plugin/core/**/*.ts!",
+    "src/types/**/*.ts!"
+  ],
+  "project": ["src/**/*.ts!", "!src/**/*.test.ts!", "!src/**/*.spec.ts!"],
+  "ignore": [
+    "examples/**",
+    "scripts/**",
+    "dist/**",
+    "coverage/**",
+    "output/**"
+  ],
+  "ignoreDependencies": [
+    "@types/*",
+    "obsidian",
+    "electron"
+  ],
+  "ignoreExportsUsedInFile": true,
+  "includeEntryExports": true
+}

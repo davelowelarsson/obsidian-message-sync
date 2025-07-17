@@ -1,0 +1,60 @@
+{
+  "name": "obsidian-message-sync",
+  "version": "0.1.0",
+  "description": "Extensible Obsidian plugin for syncing messages from Slack and other platforms into Obsidian notes",
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "NODE_ENV=development node esbuild.config.mjs",
+    "build:dev": "NODE_ENV=development node esbuild.config.mjs",
+    "build:prod": "NODE_ENV=production node esbuild.config.mjs",
+    "build:watch": "NODE_ENV=development node esbuild.config.mjs --watch",
+    "build:cli": "tsc --build && tsc-alias",
+    "test": "vitest --run",
+    "test:watch": "vitest --watch",
+    "test:coverage": "vitest --coverage --run",
+    "test:ui": "vitest --ui",
+    "test:unit": "vitest --run tests/unit",
+    "test:integration": "vitest --run tests/integration",
+    "lint": "biome lint .",
+    "lint:fix": "biome lint --write .",
+    "format": "biome format .",
+    "format:write": "biome format --write .",
+    "check": "biome check .",
+    "check:fix": "biome check --write .",
+    "ci": "biome ci .",
+    "type-check": "tsc --noEmit",
+    "dead-code": "knip --production",
+    "clean": "rm -rf dist coverage"
+  },
+  "keywords": [
+    "obsidian",
+    "plugin",
+    "slack",
+    "sync",
+    "messages",
+    "typescript"
+  ],
+  "author": "",
+  "license": "MIT",
+  "packageManager": "pnpm@10.13.1",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "dependencies": {
+    "yaml": "^2.3.4",
+    "zod": "^4.0.5"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.1.1",
+    "@types/node": "^24.0.13",
+    "@vitest/coverage-v8": "^3.2.4",
+    "@vitest/ui": "^3.2.4",
+    "esbuild": "^0.25.6",
+    "knip": "^5.61.3",
+    "obsidian": "^1.8.7",
+    "tsc-alias": "^1.8.16",
+    "typescript": "^5.3.3",
+    "vitest": "^3.2.4"
+  }
+}

@@ -1,0 +1,220 @@
+<PRD>
+# Obsidian Message Sync Plugin
+
+## Overview
+Build an extensible Obsidian plugin (and CLI prototype) in TypeScript that periodically fetches messages from communication platforms (starting with Slack) and appends them into Obsidian notes. The design separates "getter" modules from note-writers, enabling future expansion to new sources (Telegram, Teams, etc.) and output formats.
+
+## Target Audience
+- Obsidian users who want to consolidate communication history into their knowledge base
+- Teams using Slack who want to preserve important conversations in Obsidian
+- Knowledge workers who prefer unified information repositories
+
+## Problem Statement
+- Important conversations in Slack channels are lost over time or become hard to find
+- Users need to manually copy-paste messages from various platforms into their notes
+- No unified way to track and preserve discussions across different communication platforms
+- Switching between Slack and Obsidian disrupts workflow and context
+
+## Solution Overview
+A two-phase approach:
+1. **Phase 1**: CLI prototype with Slack integration, demonstrating core functionality
+2. **Phase 2**: Full Obsidian plugin with UI and expanded features
+
+### Core Architecture
+- **Modular getter system**: Each platform (Slack, Telegram, etc.) has its own getter module
+- **Flexible writers**: Different output formats (daily notes, dedicated channels, etc.)
+- **Scheduler**: Configurable timing for message fetching
+- **Secure configuration**: Environment-based secrets management
+
+## Phase 1: CLI Prototype & Research
+
+### Phase 1.1: Development Environment Setup
+**Objective**: Establish a modern TypeScript development environment with proper tooling
+
+**Key Requirements**:
+- Node.js 24 with native TypeScript support (no compilation needed)
+- PNPM for package management
+- Vitest for testing framework with TDD approach
+- Biome for linting and formatting
+- Project structure compatible with future Obsidian plugin integration
+
+**Deliverables**:
+- Complete project scaffolding with package.json
+- Configured development tools (Biome, Vitest, PNPM)
+- Basic project structure with src/ and tests/ directories
+- Working test suite with sample tests
+- Documentation for development workflow
+
+### Phase 1.2: Slack Integration Core
+**Objective**: Implement Slack message fetching with proper authentication and data processing
+
+**Key Requirements**:
+- Slack Web API integration using @slack/web-api
+- OAuth token management via environment variables
+- Message fetching with timestamp tracking (fetch only new messages)
+- Configurable channel targeting
+- Rate limiting and error handling
+
+**Deliverables**:
+- SlackGetter class with standardized message interface
+- Environment variable configuration system
+- State management for tracking last fetched message timestamps
+- Comprehensive test suite with mocked Slack API responses
+- Error handling for invalid tokens, missing channels, rate limits
+
+### Phase 1.3: Scheduling System
+**Objective**: Create a flexible, cron-based scheduling system for automated message fetching
+
+**Key Requirements**:
+- Cron expression support using node-schedule or similar
+- Human-readable schedule aliases (hourly, daily, etc.)
+- Per-source scheduling configuration
+- Background execution capability
+- Graceful handling of missed schedules
+
+**Deliverables**:
+- Scheduler class with cron expression parsing
+- Configuration system for per-source schedules
+- Background daemon capability
+- Schedule validation and error handling
+- Tests for various schedule scenarios
+
+### Phase 1.4: Configuration & Secrets Management
+**Objective**: Implement secure, flexible configuration system for CLI usage
+
+**Key Requirements**:
+- YAML-based configuration files
+- Environment variable support for sensitive data
+- Validation of configuration parameters
+- Default configuration templates
+- Easy migration path to plugin settings
+
+**Deliverables**:
+- Configuration schema and validation
+- YAML parser with type safety
+- Environment variable integration
+- Configuration templates and examples
+- Migration utilities for future plugin conversion
+
+### Phase 1.5: File Writing System
+**Objective**: Create flexible note writing system compatible with Obsidian conventions
+
+**Key Requirements**:
+- Obsidian-compatible Markdown formatting
+- Configurable output paths with template support
+- Duplicate message detection and handling
+- File locking and atomic writes
+- Support for different note organization patterns
+
+**Deliverables**:
+- Writer interface with multiple implementations
+- Markdown formatting utilities
+- Template system for note paths and content
+- Duplicate detection mechanisms
+- File system utilities with proper error handling
+
+### Phase 1.6: CLI Interface Enhancement
+**Objective**: Create user-friendly CLI interface with optional enhanced UI
+
+**Key Requirements**:
+- Command-line argument parsing
+- Configuration file management commands
+- Status and monitoring capabilities
+- Optional: Gum integration for enhanced interactive experience
+- Help documentation and usage examples
+
+**Deliverables**:
+- CLI command structure with subcommands
+- Configuration management interface
+- Status reporting and monitoring
+- Optional: Gum-enhanced interactive prompts
+- Comprehensive help system and documentation
+
+## Phase 2: Obsidian Plugin Integration
+
+### Phase 2.1: Plugin Architecture
+**Objective**: Adapt CLI core logic into Obsidian plugin structure
+
+**Key Requirements**:
+- Obsidian plugin manifest and structure
+- Integration with Obsidian Vault API
+- Plugin settings page
+- Commands and ribbon integration
+- Hot reload support during development
+
+### Phase 2.2: User Interface
+**Objective**: Create intuitive settings and management interface
+
+**Key Requirements**:
+- Settings tab for configuration
+- Source management interface
+- Schedule configuration UI
+- Status monitoring dashboard
+- Import/export of configurations
+
+### Phase 2.3: Enhanced Features
+**Objective**: Add Obsidian-specific enhancements
+
+**Key Requirements**:
+- Integration with daily notes
+- Link generation to original messages
+- Search integration
+- Notification system
+- Backup and sync capabilities
+
+## Technical Requirements
+
+### Development Stack
+- **Runtime**: Node.js 24 with native TypeScript support
+- **Package Manager**: PNPM
+- **Testing**: Vitest with TDD approach
+- **Linting**: Biome for code formatting and linting
+- **Build System**: ESBuild for production builds
+
+### External Dependencies
+- **Slack Integration**: @slack/web-api for Slack API
+- **Scheduling**: node-schedule for cron-style scheduling
+- **Configuration**: YAML parsing library
+- **CLI Enhancement**: Optional Gum for interactive prompts
+
+### Code Quality Standards
+- Test-driven development with Vitest
+- TypeScript strict mode
+- Comprehensive error handling
+- Proper logging and monitoring
+- Security best practices for token management
+
+## Success Metrics
+- **Functionality**: Successfully fetch and save Slack messages
+- **Reliability**: Handle API rate limits and network issues gracefully
+- **Performance**: Process messages efficiently without blocking
+- **Usability**: Clear configuration and setup process
+- **Extensibility**: Easy addition of new platforms and output formats
+
+## Future Enhancements
+- Additional platforms (Telegram, Teams, Discord, Signal)
+- Advanced filtering and search capabilities
+- Message threading and conversation tracking
+- Integration with other Obsidian plugins
+- Cloud sync and backup features
+- Multi-workspace support
+
+## Risks and Mitigations
+- **API Rate Limits**: Implement exponential backoff and respect rate limits
+- **Token Security**: Use secure environment variable handling
+- **Data Loss**: Implement atomic writes and backup mechanisms
+- **Slack API Changes**: Build robust error handling and API versioning
+- **Plugin Compatibility**: Follow Obsidian plugin guidelines strictly
+
+## Development Timeline
+- **Phase 1.1-1.3**: Core infrastructure and Slack integration (2-3 weeks)
+- **Phase 1.4-1.6**: Configuration and CLI interface (1-2 weeks)
+- **Phase 2.1-2.3**: Obsidian plugin development (2-3 weeks)
+- **Testing and Polish**: Bug fixes and documentation (1 week)
+
+## Appendix
+- Research findings on Node.js 24 native TypeScript support
+- Obsidian plugin development best practices
+- Slack API documentation and rate limiting
+- Security considerations for token management
+</PRD>

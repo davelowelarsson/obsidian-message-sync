@@ -1,0 +1,11 @@
+{
+  "id": "obsidian-message-sync",
+  "name": "Message Sync",
+  "version": "0.1.0",
+  "minAppVersion": "0.15.0",
+  "description": "Extensible Obsidian plugin for syncing messages from Slack and other platforms into Obsidian notes with flexible configuration and markdown templating",
+  "author": "Message Sync Team",
+  "authorUrl": "https://github.com/obsidianmd/obsidian-message-sync",
+  "isDesktopOnly": false,
+  "fundingUrl": "https://github.com/sponsors/message-sync"
+}

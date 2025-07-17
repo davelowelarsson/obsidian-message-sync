@@ -1,0 +1,1064 @@
+````markdown
+# 🔧 Plugin Enhancement: LLM-Driven Enrichment & Tagging
+
+Extend the obsidian message sync flow with optional LLM-powered enrichment—adding summaries, context blurbs, and tags—to improve the clarity and discoverability of your note entries.
+
+---
+
+## 1. 📚 Architecture Overview
+
+This enhancement integrates seamlessly with the existing message sync pipeline. We use mdsat and markdown tables when writing, and the LLM enrichment can be incorporated into the mdsat tree before writing the markdown file.
+
+```text
+[Message Services] → [Batcher] → [LLM Enricher (optional)] → [Markdown Writer]
+````
+
+### Component Definitions
+
+* **Message Services**: Existing Slack/Teams DM collectors that fetch messages from various sources
+* **Batcher**: Groups messages by configurable time periods (**day**, **week**, or **month**)
+* **LLM Enricher (optional)**:
+  * Adds **summary** (1–2 sentences per batch)
+  * Proposes **tags** based on message content
+  * Optionally rewrites minimal messages with clearer context (`blurb`)
+* **Markdown Writer**: Injects enriched entries into notes using Obsidian vault API or file I/O
+
+### Integration Points
+- The LLM Enricher operates between batching and writing phases
+- Enrichment is completely optional and configurable per source
+- Original message content is always preserved
+
+---
+
+## 2. 🔁 Data Flow
+
+### Processing Pipeline
+
+1. **Message Collection**
+   - Message Services fetch new messages from configured sources (Slack, Teams, etc.)
+   - Messages include timestamp, author, content, and metadata
+
+2. **Batching**
+   - Group messages by configurable time periods (day/week/month)
+   - Each batch contains messages from the same time window
+
+3. **Optional LLM Enrichment**
+   - **Input**: Batch of messages with timestamps and content
+   - **Process**:
+     - Formulate structured prompt with batch items
+     - Call LLM service (e.g., Ollama, OpenAI-compatible endpoint)
+     - Parse structured JSON response
+   - **Output**: Enrichment data containing:
+     - `summary`: 1-2 sentence overview of the batch
+     - `tags`: Array of relevant tags
+     - `enriched[]`: Per-message enhancements (optional blurbs)
+
+4. **Markdown Generation**
+   - Merge original messages with enrichment data
+   - Format according to configurable template:
+   ```markdown
+   ### YYYY-MM-DD
+   **Summary:** [Generated summary]
+   **Tags:** #tag1 #tag2 #tag3
+
+   - **HH:MM:SS** — [Original message content]
+     _[Optional blurb/rewrite]_
+   ```
+
+5. **Note Integration**
+   - Append or merge into existing note files
+   - Use Obsidian vault API or direct file I/O
+   - Maintain note structure and existing content
+
+### Error Handling
+- Graceful fallback when LLM service is unavailable
+- Preserve original messages if enrichment fails
+- Configurable retry logic for temporary failures
+
+---
+
+## 3. 🧩 LLM Prompt & Response Structure
+
+### Prompt Template
+
+```
+You are an AI assistant that analyzes and enriches message batches for note-taking.
+
+Here are messages from [DATE_RANGE]:
+[MESSAGE_LIST]
+
+Task: Create a summary, suggest tags, and optionally provide clarifying blurbs for messages.
+
+Requirements:
+- Summary: 1-2 sentences capturing the main themes
+- Tags: 3-5 relevant tags for categorization
+- Blurbs: Optional clarifying context for unclear messages
+
+Output format (JSON):
+{
+  "summary": "Brief overview of the message batch",
+  "tags": ["tag1", "tag2", "tag3"],
+  "enriched": [
+    {
+      "ts": "ISO timestamp",
+      "text": "Original message text",
+      "blurb": "Optional clarifying context"
+    }
+  ]
+}
+```
+
+### Example Input
+
+```
+You are an AI assistant that analyzes and enriches message batches for note-taking.
+
+Here are messages from 2025-07-13:
+- [21:18:20] AA and AAA battery dispenser for SKÅDIS... https://...
+- [21:17:19] IKEA SKADIS - LITOSFAR Battery Charger Mount... https://...
+- [12:55:14] Tutorial: How to Finetune Llama-3... https://...
+
+Task: Create a summary, suggest tags, and optionally provide clarifying blurbs for messages.
+
+Requirements:
+- Summary: 1-2 sentences capturing the main themes
+- Tags: 3-5 relevant tags for categorization
+- Blurbs: Optional clarifying context for unclear messages
+
+Output format (JSON):
+{
+  "summary": "Brief overview of the message batch",
+  "tags": ["tag1", "tag2", "tag3"],
+  "enriched": [
+    {
+      "ts": "ISO timestamp",
+      "text": "Original message text",
+      "blurb": "Optional clarifying context"
+    }
+  ]
+}
+```
+
+### JSON Schema
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "summary": {
+      "type": "string",
+      "description": "1-2 sentence summary of the message batch"
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Array of relevant tags for categorization"
+    },
+    "enriched": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "ts": { "type": "string", "format": "date-time" },
+          "text": { "type": "string" },
+          "blurb": { "type": "string" }
+        },
+        "required": ["ts", "text"]
+      }
+    }
+  },
+  "required": ["summary", "tags", "enriched"]
+}
+```
+
+---
+
+## 4. 💡 Real-World Examples
+
+### Example 1: Hardware/DIY Messages
+
+**Input Messages:**
+```
+- [21:18:20] AA and AAA battery dispenser for SKÅDIS... https://www.printables.com/model/123456
+- [21:17:19] IKEA SKADIS - LITOSFAR Battery Charger Mount... https://www.printables.com/model/789012
+```
+
+**LLM Response:**
+```json
+{
+  "summary": "Bookmarked two SKÅDIS-compatible 3D printable organizers for batteries and charging.",
+  "tags": ["3D-printing", "electronics", "DIY", "organization", "IKEA"],
+  "enriched": [
+    {
+      "ts": "2025-07-13T21:18:20Z",
+      "text": "AA and AAA battery dispenser for SKÅDIS... https://www.printables.com/model/123456",
+      "blurb": "3D printable battery dispenser that mounts to IKEA SKÅDIS pegboard system"
+    },
+    {
+      "ts": "2025-07-13T21:17:19Z",
+      "text": "IKEA SKADIS - LITOSFAR Battery Charger Mount... https://www.printables.com/model/789012",
+      "blurb": "Mounting bracket for LITOSFAR battery charger on SKÅDIS pegboard"
+    }
+  ]
+}
+```
+
+**Final Markdown Output:**
+```markdown
+### 2025-07-13
+**Summary:** Bookmarked two SKÅDIS-compatible 3D printable organizers for batteries and charging.
+**Tags:** #3D-printing #electronics #DIY #organization #IKEA
+
+- **21:17:19** — IKEA SKADIS - LITOSFAR Battery Charger Mount... https://www.printables.com/model/789012
+  _Mounting bracket for LITOSFAR battery charger on SKÅDIS pegboard_
+
+- **21:18:20** — AA and AAA battery dispenser for SKÅDIS... https://www.printables.com/model/123456
+  _3D printable battery dispenser that mounts to IKEA SKÅDIS pegboard system_
+```
+
+### Example 2: Technical Learning Messages
+
+**Input Messages:**
+```
+- [14:30:15] How to implement OAuth 2.0 with PKCE in React Native
+- [14:32:45] JWT vs Session tokens - security implications
+- [14:35:20] Best practices for mobile app authentication
+```
+
+**LLM Response:**
+```json
+{
+  "summary": "Researched mobile authentication patterns focusing on OAuth 2.0, JWT tokens, and security best practices.",
+  "tags": ["authentication", "mobile-development", "security", "OAuth", "JWT"],
+  "enriched": [
+    {
+      "ts": "2025-07-13T14:30:15Z",
+      "text": "How to implement OAuth 2.0 with PKCE in React Native",
+      "blurb": "OAuth 2.0 with Proof Key for Code Exchange - secure authentication flow for mobile apps"
+    },
+    {
+      "ts": "2025-07-13T14:32:45Z",
+      "text": "JWT vs Session tokens - security implications"
+    },
+    {
+      "ts": "2025-07-13T14:35:20Z",
+      "text": "Best practices for mobile app authentication"
+    }
+  ]
+}
+```
+
+**Final Markdown Output:**
+```markdown
+### 2025-07-13
+**Summary:** Researched mobile authentication patterns focusing on OAuth 2.0, JWT tokens, and security best practices.
+**Tags:** #authentication #mobile-development #security #OAuth #JWT
+
+- **14:30:15** — How to implement OAuth 2.0 with PKCE in React Native
+  _OAuth 2.0 with Proof Key for Code Exchange - secure authentication flow for mobile apps_
+
+- **14:32:45** — JWT vs Session tokens - security implications
+
+- **14:35:20** — Best practices for mobile app authentication
+```
+
+### Formatting Guidelines
+
+- **Chronological ordering**: Messages sorted by timestamp within each day
+- **Conditional blurbs**: Only show blurbs when they add meaningful context
+- **Tag normalization**: Convert spaces to hyphens, lowercase for consistency
+- **Preserve URLs**: Always maintain original links and formatting
+- **Clean presentation**: Use consistent spacing and indentation
+
+---
+
+## 5. ⚙️ Configuration & UX Options
+
+### Core Settings
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `enableEnrichment` | boolean | `false` | Master toggle for LLM enrichment |
+| `enrichmentSources` | string[] | `[]` | List of message sources to enrich (e.g., `["slack", "teams"]`) |
+| `llmProvider` | string | `"ollama"` | LLM service provider (`"ollama"`, `"openai"`, `"anthropic"`) |
+| `llmModel` | string | `"llama3"` | Model identifier (e.g., `"llama3"`, `"gpt-4"`, `"claude-3-sonnet"`) |
+| `llmEndpoint` | string | `"http://localhost:11434"` | API endpoint for LLM service |
+| `maxTags` | number | `5` | Maximum number of tags to generate per batch |
+| `summaryLength` | string | `"short"` | Summary length (`"short"`, `"medium"`, `"long"`) |
+| `enableBlurbs` | boolean | `true` | Whether to generate message blurbs |
+| `promptTemplate` | string | `"default"` | Custom prompt template identifier |
+| `retryAttempts` | number | `3` | Number of retry attempts for failed LLM calls |
+| `timeout` | number | `30000` | Request timeout in milliseconds |
+
+### Advanced Configuration
+
+```yaml
+# config.yaml example
+llmEnrichment:
+  enabled: true
+  sources:
+    - slack
+    - teams
+  provider: ollama
+  model: llama3
+  endpoint: http://localhost:11434
+
+  settings:
+    maxTags: 5
+    summaryLength: short
+    enableBlurbs: true
+    retryAttempts: 3
+    timeout: 30000
+
+  prompts:
+    default: |
+      You are an AI assistant that analyzes and enriches message batches for note-taking.
+      Create concise summaries, relevant tags, and helpful blurbs.
+
+    technical: |
+      You are a technical documentation assistant. Focus on technical concepts,
+      programming languages, and development tools when analyzing messages.
+```
+
+### User Interface Features
+
+#### Obsidian Plugin UI
+- **Settings Panel**: Toggle enrichment per source with visual indicators
+- **Model Selection**: Dropdown for available LLM models with status indicators
+- **Batch Processing**: Progress bar for enrichment operations
+- **Re-enrich Command**: Right-click context menu for existing notes
+- **Preview Mode**: Side-by-side comparison of original vs enriched content
+
+#### CLI Interface
+```bash
+# Enable enrichment for specific sources
+obsidian-sync config set llm.sources "slack,teams"
+
+# Change model
+obsidian-sync config set llm.model "gpt-4"
+
+# Re-enrich existing notes
+obsidian-sync enrich --source slack --date-range "2025-07-01:2025-07-15"
+
+# Test enrichment with dry-run
+obsidian-sync enrich --dry-run --preview
+```
+
+### Error Handling & Fallbacks
+
+- **Service Unavailable**: Gracefully skip enrichment, preserve original messages
+- **Rate Limiting**: Implement exponential backoff with configurable delays
+- **Invalid JSON**: Parse partial responses, log errors, continue processing
+- **Model Compatibility**: Automatic fallback to simpler models if advanced features fail
+- **Offline Mode**: Queue enrichment requests for later processing
+
+---
+
+## 6. 🔠️ Implementation Steps
+
+### Phase 1: Core Module Development
+
+#### 1.1 Create Enricher Module
+
+```typescript
+// src/enricher/types.ts
+interface EnrichmentResult {
+  summary: string;
+  tags: string[];
+  enriched: {
+    ts: string;
+    text: string;
+    blurb?: string;
+  }[];
+}
+
+interface EnrichmentConfig {
+  provider: 'ollama' | 'openai' | 'anthropic';
+  model: string;
+  endpoint: string;
+  maxTags: number;
+  summaryLength: 'short' | 'medium' | 'long';
+  enableBlurbs: boolean;
+  retryAttempts: number;
+  timeout: number;
+}
+
+// src/enricher/enricher.ts
+export class LLMEnricher {
+  constructor(private config: EnrichmentConfig) {}
+
+  async enrichBatch(messages: Message[]): Promise<EnrichmentResult> {
+    const prompt = this.buildPrompt(messages);
+    const response = await this.callLLM(prompt);
+    return this.parseResponse(response);
+  }
+
+  private buildPrompt(messages: Message[]): string {
+    // Implementation details...
+  }
+
+  private async callLLM(prompt: string): Promise<string> {
+    // LLM service integration...
+  }
+
+  private parseResponse(response: string): EnrichmentResult {
+    // JSON parsing with error handling...
+  }
+}
+```
+
+#### 1.2 LLM Service Adapters
+
+```typescript
+// src/enricher/adapters/base.ts
+abstract class LLMAdapter {
+  abstract async call(prompt: string): Promise<string>;
+}
+
+// src/enricher/adapters/ollama.ts
+class OllamaAdapter extends LLMAdapter {
+  async call(prompt: string): Promise<string> {
+    // Ollama-specific implementation
+  }
+}
+
+// src/enricher/adapters/openai.ts
+class OpenAIAdapter extends LLMAdapter {
+  async call(prompt: string): Promise<string> {
+    // OpenAI-specific implementation
+  }
+}
+```
+
+### Phase 2: Pipeline Integration
+
+#### 2.1 Modify Message Processing Pipeline
+
+```typescript
+// src/pipeline/processor.ts
+export class MessageProcessor {
+  constructor(
+    private batcher: MessageBatcher,
+    private enricher?: LLMEnricher,
+    private writer: MarkdownWriter
+  ) {}
+
+  async process(messages: Message[]): Promise<void> {
+    const batches = this.batcher.batch(messages);
+
+    for (const batch of batches) {
+      let enrichedBatch = batch;
+
+      if (this.enricher) {
+        try {
+          const enrichment = await this.enricher.enrichBatch(batch.messages);
+          enrichedBatch = { ...batch, enrichment };
+        } catch (error) {
+          console.warn('Enrichment failed, using original messages:', error);
+        }
+      }
+
+      await this.writer.write(enrichedBatch);
+    }
+  }
+}
+```
+
+#### 2.2 Update Markdown Writer
+
+Below is only an example of how the MarkdownWriter could be implemented to handle enriched batches. Make sure we utilise mdsat and markdown-table where appropriate.
+
+```typescript
+// src/writers/markdown-writer.ts
+export class MarkdownWriter {
+  write(batch: EnrichedBatch): Promise<void> {
+    const markdown = this.formatBatch(batch);
+    return this.writeToFile(markdown);
+  }
+
+  private formatBatch(batch: EnrichedBatch): string {
+    let output = `### ${batch.date}\n`;
+
+    if (batch.enrichment) {
+      output += `**Summary:** ${batch.enrichment.summary}\n`;
+      output += `**Tags:** ${batch.enrichment.tags.map(tag => `#${tag}`).join(' ')}\n\n`;
+    }
+
+    batch.messages.forEach(message => {
+      output += `- **${message.time}** — ${message.text}\n`;
+
+      const enrichedMsg = batch.enrichment?.enriched.find(e => e.ts === message.ts);
+      if (enrichedMsg?.blurb) {
+        output += `  _${enrichedMsg.blurb}_\n`;
+      }
+    });
+
+    return output;
+  }
+}
+```
+
+### Phase 3: Testing & Validation
+
+#### 3.1 Unit Tests
+
+```typescript
+// tests/unit/enricher.test.ts
+import { describe, it, expect, vi } from 'vitest';
+import { LLMEnricher } from '../src/enricher/enricher';
+
+describe('LLMEnricher', () => {
+  it('should enrich messages with summary and tags', async () => {
+    const mockConfig = {
+      provider: 'ollama',
+      model: 'llama3',
+      endpoint: 'http://localhost:11434',
+      maxTags: 5,
+      summaryLength: 'short',
+      enableBlurbs: true,
+      retryAttempts: 3,
+      timeout: 30000
+    };
+
+    const enricher = new LLMEnricher(mockConfig);
+
+    // Mock LLM response
+    vi.spyOn(enricher as any, 'callLLM').mockResolvedValue(`
+      {
+        "summary": "Test summary",
+        "tags": ["test", "example"],
+        "enriched": [{
+          "ts": "2025-07-13T21:18:20Z",
+          "text": "Test message",
+          "blurb": "Test blurb"
+        }]
+      }
+    `);
+
+    const result = await enricher.enrichBatch([{
+      ts: '2025-07-13T21:18:20Z',
+      text: 'Test message',
+      author: 'Test User'
+    }]);
+
+    expect(result.summary).toBe('Test summary');
+    expect(result.tags).toEqual(['test', 'example']);
+    expect(result.enriched).toHaveLength(1);
+  });
+});
+```
+
+#### 3.2 Integration Tests
+
+Integrations tests should always be mocked to avoid hitting real LLM services during CI runs.
+This is a test components in the application works as expected, not outside dependencies.
+
+```typescript
+// tests/integration/enricher-pipeline.test.ts
+describe('Full Pipeline Integration', () => {
+  it('should process messages through complete pipeline', async () => {
+    // Test complete flow from message input to markdown output
+  });
+
+  it('should handle LLM service failures gracefully', async () => {
+    // Test error handling and fallback behavior
+  });
+});
+```
+
+### Phase 4: Configuration & UI
+
+#### 4.1 Configuration Management
+
+```typescript
+// src/config/enrichment.ts
+export interface EnrichmentSettings {
+  enabled: boolean;
+  sources: string[];
+  provider: string;
+  model: string;
+  endpoint: string;
+  maxTags: number;
+  summaryLength: string;
+  enableBlurbs: boolean;
+  retryAttempts: number;
+  timeout: number;
+}
+
+export class EnrichmentConfig {
+  static load(): EnrichmentSettings {
+    // Load from config file or environment
+  }
+
+  static save(settings: EnrichmentSettings): void {
+    // Save to config file
+  }
+}
+```
+
+#### 4.2 Obsidian Plugin Settings
+
+```typescript
+// src/obsidian/settings.ts
+export class EnrichmentSettingsTab extends PluginSettingTab {
+  display(): void {
+    const { containerEl } = this;
+    containerEl.empty();
+
+    new Setting(containerEl)
+      .setName('Enable LLM Enrichment')
+      .setDesc('Add summaries, tags, and blurbs to message batches')
+      .addToggle(toggle => toggle
+        .setValue(this.plugin.settings.enrichment.enabled)
+        .onChange(async (value) => {
+          this.plugin.settings.enrichment.enabled = value;
+          await this.plugin.saveSettings();
+        })
+      );
+
+    // Additional settings...
+  }
+}
+```
+
+### Phase 5: Documentation & Deployment
+
+#### 5.1 API Documentation
+- Generate TypeScript documentation with TSDoc
+- Create usage examples for each configuration option
+- Document error codes and troubleshooting steps
+
+#### 5.2 User Documentation
+- Setup guide for different LLM providers
+- Configuration examples for common use cases
+- Migration guide for existing users
+
+### Success Metrics
+
+- **Functionality**: All unit tests pass (>95% coverage)
+- **Performance**: Enrichment adds <2s to processing time
+- **Reliability**: <1% failure rate in production
+- **User Experience**: Positive feedback from beta testers
+- **Compatibility**: Works with Ollama, OpenAI, and Anthropic APIs
+
+---
+
+## 7. 📄 Media Content Processing
+
+### Overview
+
+To enhance the flexibility and comprehensiveness of your note enrichment process, this section outlines a modular, optional approach to handle media content, such as images and PDFs. This architecture is designed to be easily expandable for future capabilities such as parsing PowerPoints or other file types.
+
+### Core Challenges
+
+- **LLM Limitations**: Not all LLMs (especially local models like Ollama) can process images or files directly
+- **Performance Impact**: Media processing can be resource-intensive
+- **User Choice**: Users should have granular control over which media types to process
+- **Extensibility**: Architecture should support adding new file types easily
+
+### Architecture Design
+
+```text
+[Message Services] → [Media Processor (optional)] → [Batcher] → [LLM Enricher] → [Markdown Writer]
+```
+
+#### Media Processing Pipeline
+
+1. **Pre-processing Phase**
+   - Detect attachments in messages
+   - Check user configuration for enabled media types
+   - Extract text content from supported file types
+   - Append extracted text to original message content
+
+2. **Text Extraction Methods**
+   - **Images**: Use OCR (Optical Character Recognition) with Tesseract.js
+   - **PDFs**: Parse text content with pdf-parse library
+   - **Future**: PowerPoint, Word docs, etc.
+
+### Configuration Options
+
+#### Media Processing Settings
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `enableMediaProcessing` | boolean | `false` | Master toggle for media content processing |
+| `enableOCR` | boolean | `false` | Enable OCR for extracting text from images |
+| `enablePDFParse` | boolean | `false` | Enable text extraction from PDFs |
+| `ocrLanguage` | string | `"eng"` | OCR language setting |
+| `pdfMaxPages` | number | `10` | Maximum pages to process per PDF |
+| `mediaTimeout` | number | `30000` | Timeout for media processing operations |
+
+#### Configuration Example
+
+```yaml
+# config.yaml
+mediaProcessing:
+  enabled: true
+  ocr:
+    enabled: true
+    language: "eng"
+  pdf:
+    enabled: true
+    maxPages: 10
+  timeout: 30000
+```
+
+### TypeScript Implementation
+
+#### Media Processor Architecture
+
+```typescript
+// src/media/types.ts
+export interface MediaContent {
+  type: 'image' | 'pdf' | 'unsupported';
+  extractedText?: string;
+  metadata?: {
+    fileName: string;
+    size: number;
+    pages?: number;
+    language?: string;
+  };
+  error?: string;
+}
+
+export interface MediaSettings {
+  enableMediaProcessing: boolean;
+  enableOCR: boolean;
+  enablePDFParse: boolean;
+  ocrLanguage: string;
+  pdfMaxPages: number;
+  mediaTimeout: number;
+}
+
+// src/media/processor.ts
+export class MediaProcessor {
+  private ocrHandler?: OCRHandler;
+  private pdfHandler?: PDFHandler;
+  private settings: MediaSettings;
+
+  constructor(settings: MediaSettings) {
+    this.settings = settings;
+    
+    if (settings.enableOCR) {
+      this.ocrHandler = new OCRHandler(settings.ocrLanguage);
+    }
+    
+    if (settings.enablePDFParse) {
+      this.pdfHandler = new PDFHandler(settings.pdfMaxPages);
+    }
+  }
+
+  async processAttachment(filePath: string): Promise<MediaContent> {
+    const extension = path.extname(filePath).toLowerCase();
+    
+    try {
+      switch (extension) {
+        case '.jpg':
+        case '.jpeg':
+        case '.png':
+        case '.gif':
+        case '.bmp':
+        case '.tiff':
+          return this.settings.enableOCR && this.ocrHandler
+            ? await this.ocrHandler.process(filePath)
+            : { type: 'image' };
+        
+        case '.pdf':
+          return this.settings.enablePDFParse && this.pdfHandler
+            ? await this.pdfHandler.process(filePath)
+            : { type: 'pdf' };
+        
+        default:
+          return { type: 'unsupported' };
+      }
+    } catch (error) {
+      return {
+        type: extension.includes('pdf') ? 'pdf' : 'image',
+        error: error.message
+      };
+    }
+  }
+
+  async dispose(): Promise<void> {
+    if (this.ocrHandler) {
+      await this.ocrHandler.dispose();
+    }
+  }
+}
+```
+
+#### OCR Handler (using Tesseract.js)
+
+```typescript
+// src/media/handlers/ocr.ts
+import { createWorker } from 'tesseract.js';
+
+export class OCRHandler {
+  private worker: Tesseract.Worker | null = null;
+
+  constructor(private language: string = 'eng') {}
+
+  async initialize(): Promise<void> {
+    this.worker = await createWorker();
+    await this.worker.loadLanguage(this.language);
+    await this.worker.initialize(this.language);
+  }
+
+  async process(imagePath: string): Promise<MediaContent> {
+    if (!this.worker) {
+      await this.initialize();
+    }
+
+    const { data: { text } } = await this.worker!.recognize(imagePath);
+    
+    return {
+      type: 'image',
+      extractedText: text.trim(),
+      metadata: {
+        fileName: path.basename(imagePath),
+        size: fs.statSync(imagePath).size,
+        language: this.language
+      }
+    };
+  }
+
+  async dispose(): Promise<void> {
+    if (this.worker) {
+      await this.worker.terminate();
+      this.worker = null;
+    }
+  }
+}
+```
+
+#### PDF Handler (using pdf-parse)
+
+```typescript
+// src/media/handlers/pdf.ts
+import pdf from 'pdf-parse';
+import { readFileSync } from 'fs';
+
+export class PDFHandler {
+  constructor(private maxPages: number = 10) {}
+
+  async process(pdfPath: string): Promise<MediaContent> {
+    const dataBuffer = readFileSync(pdfPath);
+    const data = await pdf(dataBuffer, {
+      max: this.maxPages
+    });
+
+    return {
+      type: 'pdf',
+      extractedText: data.text,
+      metadata: {
+        fileName: path.basename(pdfPath),
+        size: dataBuffer.length,
+        pages: data.numpages
+      }
+    };
+  }
+}
+```
+
+### Integration with Message Processing
+
+```typescript
+// src/enrichment/messageEnricher.ts
+export class MessageEnricher {
+  private mediaProcessor?: MediaProcessor;
+
+  constructor(private settings: EnrichmentSettings) {
+    if (settings.mediaProcessing?.enabled) {
+      this.mediaProcessor = new MediaProcessor(settings.mediaProcessing);
+    }
+  }
+
+  async enrichMessage(message: Message): Promise<EnrichedMessage> {
+    let enrichedText = message.text;
+    const mediaContent: MediaContent[] = [];
+
+    // Process attachments if media processing is enabled
+    if (this.mediaProcessor && message.attachments) {
+      for (const attachment of message.attachments) {
+        const content = await this.mediaProcessor.processAttachment(attachment.path);
+        mediaContent.push(content);
+        
+        // Append extracted text to message for LLM processing
+        if (content.extractedText) {
+          enrichedText += `\n\n[Extracted from ${attachment.name}]:\n${content.extractedText}`;
+        }
+      }
+    }
+
+    return {
+      ...message,
+      text: enrichedText,
+      mediaContent
+    };
+  }
+
+  async dispose(): Promise<void> {
+    if (this.mediaProcessor) {
+      await this.mediaProcessor.dispose();
+    }
+  }
+}
+```
+
+### Testing Strategy
+
+```typescript
+// tests/media/processor.test.ts
+import { describe, it, expect, vi } from 'vitest';
+import { MediaProcessor } from '../src/media/processor';
+
+describe('MediaProcessor', () => {
+  it('should extract text from images when OCR is enabled', async () => {
+    const settings = {
+      enableMediaProcessing: true,
+      enableOCR: true,
+      enablePDFParse: false,
+      ocrLanguage: 'eng',
+      pdfMaxPages: 10,
+      mediaTimeout: 30000
+    };
+
+    const processor = new MediaProcessor(settings);
+    
+    // Mock OCR result
+    const mockOCR = vi.fn().mockResolvedValue({
+      type: 'image',
+      extractedText: 'Sample extracted text',
+      metadata: { fileName: 'test.jpg', size: 1024, language: 'eng' }
+    });
+
+    const result = await processor.processAttachment('/path/to/image.jpg');
+    
+    expect(result.type).toBe('image');
+    expect(result.extractedText).toBe('Sample extracted text');
+  });
+
+  it('should skip processing when media processing is disabled', async () => {
+    const settings = {
+      enableMediaProcessing: false,
+      enableOCR: false,
+      enablePDFParse: false,
+      ocrLanguage: 'eng',
+      pdfMaxPages: 10,
+      mediaTimeout: 30000
+    };
+
+    const processor = new MediaProcessor(settings);
+    const result = await processor.processAttachment('/path/to/image.jpg');
+    
+    expect(result.type).toBe('image');
+    expect(result.extractedText).toBeUndefined();
+  });
+});
+```
+
+### Future Extensions
+
+#### Planned File Type Support
+
+- **PowerPoint (.pptx)**: Extract text from slides using `pptx-parser`
+- **Word Documents (.docx)**: Parse content with `mammoth.js`
+- **Excel (.xlsx)**: Extract data using `xlsx` library
+- **Audio Files**: Transcription with Whisper or similar
+
+#### Modular Handler Pattern
+
+```typescript
+// src/media/handlers/base.ts
+export abstract class MediaHandler {
+  abstract readonly supportedExtensions: string[];
+  abstract process(filePath: string): Promise<MediaContent>;
+  abstract dispose?(): Promise<void>;
+}
+
+// src/media/handlers/powerpoint.ts
+export class PowerPointHandler extends MediaHandler {
+  readonly supportedExtensions = ['.pptx', '.ppt'];
+  
+  async process(filePath: string): Promise<MediaContent> {
+    // Implementation for PowerPoint processing
+  }
+}
+```
+
+#### Configuration UI
+
+```typescript
+// Obsidian plugin settings
+new Setting(containerEl)
+  .setName('Enable Media Processing')
+  .setDesc('Extract text from images and PDFs for enrichment')
+  .addToggle(toggle => toggle
+    .setValue(this.plugin.settings.media.enabled)
+    .onChange(async (value) => {
+      this.plugin.settings.media.enabled = value;
+      await this.plugin.saveSettings();
+    })
+  );
+
+new Setting(containerEl)
+  .setName('OCR Language')
+  .setDesc('Language for OCR text extraction')
+  .addDropdown(dropdown => dropdown
+    .addOptions({
+      'eng': 'English',
+      'spa': 'Spanish',
+      'fra': 'French',
+      'deu': 'German'
+    })
+    .setValue(this.plugin.settings.media.ocrLanguage)
+    .onChange(async (value) => {
+      this.plugin.settings.media.ocrLanguage = value;
+      await this.plugin.saveSettings();
+    })
+  );
+```
+
+### Performance Considerations
+
+- **Lazy Loading**: Only initialize handlers when needed
+- **Caching**: Cache extracted text to avoid reprocessing
+- **Batch Processing**: Process multiple files concurrently with limits
+- **Memory Management**: Properly dispose of OCR workers
+- **Error Handling**: Graceful degradation when processing fails
+
+### Benefits
+
+- **Modular Design**: Easy to add new file type support
+- **User Control**: Granular settings for each media type
+- **Performance**: Optional processing doesn't impact users who don't need it
+- **Extensible**: Clear patterns for adding new handlers
+- **Robust**: Proper error handling and fallbacks
+
+---
+
+## 8. 🚀 Further Enhancements
+
+* **Embeddings-based clustering** for smarter summaries (see RAG plugin discussions) ([Reddit][1], [Medium][2], [vojay-dev.github.io][3], [GitHub][4], [Obsidian Forum][5]).
+* Optional **mind-map generation**, action-item extraction, or inline backlinks using similar prompts .
+* **Local-only workflow** with Ollama: ideal for privacy and speed ([Medium][6]).
+
+---
+
+## ✅ Summary
+
+* Extend your plugin with **optional LLM enrichment** that adds summaries, tags, and blurbs.
+* Structure it modularly so enrichment is toggleable and reusable.
+* Use **Ollama** (locally) or any compatible model via a clean prompt-output loop.
+* Store enriched content in Markdown and allow users to reprocess old notes.
+* Build incrementally: module → tests → UI.
+
+---
+
+[1]: https://www.reddit.com/r/ObsidianMD/comments/1dedmeu/ai_llms_in_your_obsidian_whats_actually_been/?utm_source=chatgpt.com "AI / LLMs in your Obsidian - what's actually been useful for you?"
+[2]: https://medium.com/%40airabbitX/supercharging-obsidian-search-with-local-llms-a-personal-journey-1e008eb649a6?utm_source=chatgpt.com "Supercharging Obsidian Search with AI and Ollama - Medium"
+[3]: https://vojay-dev.github.io/local-ai-ollama?utm_source=chatgpt.com "The Ultimate Local Productivity Stack with Ollama"
+[4]: https://github.com/logancyang/obsidian-copilot/issues/1259?utm_source=chatgpt.com "Update system prompt to include Obsidian flavored / advanced ..."
+[5]: https://forum.obsidian.md/t/obsidian-rag-personal-ai-bot/93020?utm_source=chatgpt.com "Obsidian - RAG - personal AI bot - Plugins ideas"
+[6]: https://medium.com/%40austindmark/leverage-local-llms-with-obsidian-and-ollama-solar-llm-apple-silicon-example-a5ab99220ae0?utm_source=chatgpt.com "Leverage local LLMs with Obsidian and Ollama — Solar LLM ..."
