@@ -1,7 +1,7 @@
 import esbuild from 'esbuild';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { readFileSync, writeFileSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -27,6 +27,9 @@ const prodManifest = {
 
 // Choose the appropriate manifest
 const manifest = isProd ? prodManifest : devManifest;
+
+// Ensure dist directory exists
+mkdirSync('./dist', { recursive: true });
 
 // Write the manifest to the dist directory
 writeFileSync('./dist/manifest.json', JSON.stringify(manifest, null, 2));
