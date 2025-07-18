@@ -225,6 +225,15 @@ export class TemplateResolver {
     } else if (channelName.startsWith('Group DM')) {
       // Handle group DMs
       channelName = `group-dm-${channel.id}`;
+    } else if (channel.id.startsWith('D') && channelName === channel.id) {
+      // Handle raw DM channel IDs - fallback when name resolution didn't work
+      // Check if this is an IM channel
+      if (channel.is_im) {
+        channelName = `dm-${channel.id.toLowerCase()}`;
+      } else {
+        // Assume it's a DM if ID starts with D and no name was resolved
+        channelName = `dm-${channel.id.toLowerCase()}`;
+      }
     }
 
     switch (this.options.channelNameFormat) {

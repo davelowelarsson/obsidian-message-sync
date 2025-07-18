@@ -300,4 +300,39 @@ describe('TemplateResolver', () => {
       expect(result).not.toContain('*'); // Dangerous chars removed
     });
   });
+
+  describe("DM Channel Name Handling", () => {
+    it('should handle DM channels with "DM with" prefix correctly', () => {
+      const channel: SlackChannel = {
+        id: "D19HLGAFL",
+        name: "DM with David Lowe Larsson",
+        is_im: true,
+      };
+
+      const result = templateResolver.createTemplateVariables(channel);
+      expect(result.channel).toBe("dm-davidlowelarsson");
+    });
+
+    it("should handle raw DM channel IDs as fallback", () => {
+      const channel: SlackChannel = {
+        id: "D19HLGAFL",
+        // No name property - regression case
+        is_im: true,
+      };
+
+      const result = templateResolver.createTemplateVariables(channel);
+      expect(result.channel).toBe("dm-d19hlgafl");
+    });
+
+    it("should handle DM channel when name equals ID", () => {
+      const channel: SlackChannel = {
+        id: "D19HLGAFL",
+        name: "D19HLGAFL", // Name not resolved, falls back to ID
+        is_im: true,
+      };
+
+      const result = templateResolver.createTemplateVariables(channel);
+      expect(result.channel).toBe("dm-d19hlgafl");
+    });
+  });
 });
